@@ -1,0 +1,61 @@
+
+version: "3.9"
+
+networks:
+  frontend-net:
+  app-net:
+  db-net:
+
+volumes:
+  db-data:
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-appdb}
+      POSTGRES_USER: ${POSTGRES_USER:-appuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-apppass}
+    command: ["postgres","-c","config_file=/etc/postgresql/postgres.conf"]
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./db/postgres.conf:/etc/postgresql/postgres.conf:ro
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks: [db-net]
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  app1:
+    build: ./app
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-appdb}
+      POSTGRES_USER: ${POSTGRES_USER:-appuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-apppass}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [app-net, db-net]
+
+  app2:
+    build: ./app
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-appdb}
+      POSTGRES_USER: ${POSTGRES_USER:-appuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-apppass}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [app-net, db-net]
+
+  balancer:
+    build: ./balancer
+    ports: ["80:80"]
+    depends_on: [app1, app2]
+    networks: [frontend-net, app-net]
