@@ -1,1 +1,5 @@
 certs/
+.env
+certs-le/
+infra/terraform/terraform.tfvars
+cloudflare.ini

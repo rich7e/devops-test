@@ -1,8 +1,17 @@
 
 import os, socket, time, json
 import psycopg2
+import logging
+from pythonjsonlogger import jsonlogger
 from flask import Flask, jsonify, Response
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+
+logger = logging.getLogger()
+logHandler = logging.StreamHandler()
+formatter = jsonlogger.JsonFormatter('%(asctime)s %(levelname)s %(name)s %(message)s')
+logHandler.setFormatter(formatter)
+logger.addHandler(logHandler)
+logger.setLevel(logging.INFO)
 
 app = Flask(__name__)
 
@@ -46,9 +55,21 @@ def root():
     dbv = get_db_version()
     status = 200 if dbv else 500
     payload = {"hostname": socket.gethostname(), "db_version": dbv, "status": status}
+    logger.info(
+        "Request processed",
+        extra={
+            "path": "/",
+            "method": "GET",
+            "status": status,
+            "db_version": dbv,
+            "hostname": payload["hostname"],
+            "latency": round(time.time() - start, 4)
+        }
+    )
     REQ_LAT.labels("/").observe(time.time()-start)
     REQ_COUNT.labels("GET","/",status).inc()
     return jsonify(payload), status
+
 
 @app.route("/health")
 def health():
