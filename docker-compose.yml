@@ -1,6 +1,4 @@
 
-version: "3.9"
-
 networks:
   frontend-net:
   app-net:
@@ -39,6 +37,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    expose: ["8443"]
+    volumes:
+      - ./certs/app:/etc/app-tls:ro
     networks: [app-net, db-net]
 
   app2:
@@ -52,10 +53,15 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    expose: ["8443"]
+    volumes:
+      - ./certs/app:/etc/app-tls:ro
     networks: [app-net, db-net]
 
   balancer:
     build: ./balancer
     ports: ["80:80"]
     depends_on: [app1, app2]
+    volumes:
+      - ./certs/balancer:/etc/nginx/certs:ro
     networks: [frontend-net, app-net]
