@@ -6,6 +6,7 @@ networks:
 
 volumes:
   db-data:
+  certs-le:
 
 services:
   db:
@@ -60,8 +61,47 @@ services:
 
   balancer:
     build: ./balancer
-    ports: ["80:80"]
+    ports: ["80:80", "443:443"]
     depends_on: [app1, app2]
     volumes:
-      - ./certs/balancer:/etc/nginx/certs:ro
+      - ./certs-le:/etc/letsencrypt:ro
+      - ./certs/balancer:/etc/nginx/mtls:ro
+    environment:
+      - DOMAIN=example.local
     networks: [frontend-net, app-net]
+  
+#  certbot:
+#    image: certbot/dns-cloudflare:latest
+#    environment:
+#      - CF_API_TOKEN=${CF_API_TOKEN}
+#      - DOMAIN=example.local
+#    volumes:
+#      - ./certs-le:/etc/letsencrypt
+#      - ./certbot:/scripts
+#    entrypoint: ["/bin/sh", "/scripts/renew.sh"]
+#    networks: [frontend-net]
+
+  renewal:
+    image: certbot/dns-cloudflare:latest
+    container_name: certbot-renewal
+    environment:
+      - CF_API_TOKEN=${CF_API_TOKEN}
+    volumes:
+      - certs-le:/etc/letsencrypt
+      - ./certs/cloudflare.ini:/cloudflare.ini:ro
+    entrypoint: >
+      sh -c '
+        while true; do
+          certbot renew \
+            --dns-cloudflare \
+            --dns-cloudflare-credentials /cloudflare.ini \
+            --quiet --no-self-upgrade;
+          echo "[renewal] reload nginx at $(date)";
+          nginx -s reload 2>/dev/null || true;
+          sleep 60d;
+        done
+      '
+    depends_on:
+      - balancer
+    restart: always
+
